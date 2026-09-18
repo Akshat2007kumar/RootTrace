@@ -126,7 +126,21 @@ class InvestigationAgent:
     def __init__(self, retriever: HybridRetriever):
         self.retriever = retriever
 
+    async def investigate_graph(self, question: str, evidence_agent: Any):
+        from agents.graph import RootTraceGraph
+        graph_engine = RootTraceGraph(self.retriever, evidence_agent)
+        res = await graph_engine.run(question)
+        
+        state = InvestigationState(
+            question=question,
+            hops=res.get("hops", []),
+            session_entities=res.get("session_entities", {})
+        )
+        final = res.get("final_answer")
+        return state, final
+
     async def investigate(self, question: str) -> InvestigationState:
+
         state = InvestigationState(question=question)
 
         # ── Hop 1: extract initial entities and retrieve ──────────────────

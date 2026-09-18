@@ -178,13 +178,10 @@ async def investigate(req: InvestigateRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     try:
-        # Run investigation
-        state = await investigation_agent.investigate(question)
-
-        # Run evidence reasoning
-        final = await evidence_agent.reason(state)
+        # Run investigation using LangGraph execution engine
+        state, final = await investigation_agent.investigate_graph(question, evidence_agent)
     except Exception as e:
-        logger.error(f"Investigation failed: {e}", exc_info=True)
+        logger.error(f"LangGraph investigation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
     # Build hop trace for frontend
