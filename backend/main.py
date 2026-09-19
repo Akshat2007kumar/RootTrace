@@ -269,6 +269,7 @@ async def list_documents():
                 "date": d.date,
                 "version": d.version,
                 "title": d.title,
+                "content": d.content,
                 "content_preview": d.content[:200],
             }
             for d in retriever.documents

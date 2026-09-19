@@ -1,8 +1,8 @@
 """
 llm_client.py — Multi-provider LLM client with 3-tier fallback architecture:
 
-1. Primary:  Featherless AI (4 rotating keys, Qwen2.5-7B / 72B / Mistral-7B)
-2. Secondary: Google Gemini (gemini-2.5-flash / gemini-3.5-flash, key rotation)
+1. Primary: Featherless AI (rotating keys with concurrency control)
+2. Secondary: Google Gemini (gemini-3.5-flash-lite, gemini-3.6-flash)
 3. Offline Fallback: Local Ollama (http://localhost:11434 with gemma4:e2b)
 
 Embeddings: gemini-embedding-001 with local FAISS disk cache.
@@ -30,7 +30,7 @@ from api_logger import log_gemini_call
 logger = logging.getLogger(__name__)
 
 # Primary: Gemini Models
-GEMINI_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"]
+GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-3.6-flash"]
 
 # Secondary: Featherless Models
 FEATHERLESS_MODELS = [
@@ -77,10 +77,10 @@ def _get_gemini_client(key: str) -> genai.Client:
     return genai.Client(api_key=key, http_options={"api_version": GEMINI_API_VERSION})
 
 
-# ── 2. SECONDARY FALLBACK: Gemini Caller ────────────────────────────────────
+# ── 2. SECONDARY: Gemini Caller ──────────────────────────────────────────────
 
 async def _call_gemini(prompt: str, system: str = "") -> Optional[str]:
-    """Execute primary chat completion using Gemini with key and model rotation."""
+    """Execute secondary chat completion using Gemini with key and model rotation."""
     if not GEMINI_KEYS:
         return None
 
@@ -158,18 +158,18 @@ async def _call_gemini(prompt: str, system: str = "") -> Optional[str]:
     return None
 
 
-# ── 1. PRIMARY: Featherless AI Caller ───────────────────────────────────────
+# ── 1. PRIMARY: Featherless AI Caller ──────────────────────────────────────
 
 async def _call_featherless(prompt: str, system: str = "") -> Optional[str]:
-    """Execute fallback chat completion using Featherless AI with concurrency lock."""
+    """Execute primary chat completion using Featherless AI with concurrency lock."""
     if not FEATHERLESS_KEYS:
         return None
 
     # Enforce concurrency lock so requests don't hit Featherless concurrency limit = 1
     try:
-        await asyncio.wait_for(_featherless_concurrency_lock.acquire(), timeout=3.0)
+        await asyncio.wait_for(_featherless_concurrency_lock.acquire(), timeout=15.0)
     except asyncio.TimeoutError:
-        logger.info("Featherless concurrency lock busy, continuing to offline fallback")
+        logger.warning("Featherless concurrency lock busy, continuing to secondary fallback (Gemini)")
         return None
 
     try:
@@ -310,8 +310,8 @@ async def _call_ollama(prompt: str, system: str = "") -> Optional[str]:
 
 async def chat(prompt: str, system: str = "") -> str:
     """
-    1. Primary:  Featherless AI (Qwen2.5-7B / 72B / Mistral-7B across 4 rotating keys)
-    2. Secondary: Google Gemini (gemini-2.5-flash / gemini-3.5-flash)
+    1. Primary: Featherless AI (Qwen2.5-7B across rotating keys)
+    2. Secondary: Google Gemini (gemini-3.5-flash-lite, gemini-3.6-flash)
     3. Silent Offline Fallback: Local Ollama (gemma4:e2b)
     """
     # Tier 1: Featherless AI Primary
@@ -319,8 +319,8 @@ async def chat(prompt: str, system: str = "") -> str:
     if featherless_result is not None:
         return featherless_result
 
-    # Tier 2: Gemini Secondary Fallback
-    logger.warning("Featherless AI unavailable or rate limited; falling back to Gemini...")
+    # Tier 2: Google Gemini Secondary
+    logger.warning("Featherless AI keys unavailable or rate limited; falling back to Gemini...")
     gemini_result = await _call_gemini(prompt, system=system)
     if gemini_result is not None:
         return gemini_result
