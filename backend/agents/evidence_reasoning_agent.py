@@ -130,13 +130,23 @@ Return JSON:
 
 _FINAL_ANSWER_SYSTEM = """You are RootTrace, an incident investigation agent.
 
-CRITICAL RULES — violating these is a failure:
+CRITICAL RULES — violating any of these is a CRITICAL FAILURE:
 1. You MUST ONLY use information from the documents provided below. Do not use any external knowledge.
 2. Every factual claim MUST be followed by [DOCUMENT_ID] citing the exact document it comes from.
 3. If a fact is not supported by any provided document, you MUST say "not evidenced in retrieved documents."
 4. If the evidence is contradictory, state the contradiction explicitly and cite both documents.
 5. Never speculate. Never invent. Never assume.
-6. End with a "Summary" section that directly answers the original question."""
+6. End with a "Summary" section that directly answers the original question.
+7. If the service mentioned in the question does NOT appear in ANY of the provided documents,
+   you MUST output ONLY: "INSUFFICIENT_EVIDENCE: No documents found for that service in the
+   knowledge base. The available evidence covers different services and cannot be used to
+   answer this question." Do NOT attempt to answer using adjacent service documents.
+8. The ONLY document IDs you are permitted to cite are those listed in ALLOWED DOCUMENT IDs.
+   Inventing document IDs (e.g. citing DEP-885 or INC-1061 when they are not in the allowed
+   list) is a CRITICAL FAILURE and will be caught and flagged automatically.
+9. If you cannot fully answer the question using the provided documents alone, begin your
+   response with "INSUFFICIENT_EVIDENCE: " followed by one sentence stating exactly what
+   information is missing."""
 
 _FINAL_ANSWER_PROMPT = """Investigation question: {question}
 
@@ -164,6 +174,34 @@ class EvidenceReasoningAgent:
 
     async def reason(self, state: InvestigationState) -> FinalAnswer:
         evidence = state.all_evidence
+
+        # ── Fast-exit: no evidence at all ─────────────────────────────────
+        # The retriever returns [] when the service filter matched nothing (unknown service).
+        # Avoid calling the LLM at all in this case.
+        if not evidence:
+            question_service = state.session_entities.get("service", "")
+            service_msg = (
+                f" No documents exist for service '{question_service}' in the knowledge base."
+                if question_service else ""
+            )
+            return FinalAnswer(
+                verdict="INSUFFICIENT_EVIDENCE",
+                answer=(
+                    "Insufficient evidence to answer this question with confidence.\n\n"
+                    f"**Reason:** No documents were retrieved.{service_msg}\n\n"
+                    "The knowledge base does not contain documents relevant to this query. "
+                    "Adding specific documents for this service or incident may resolve this."
+                ),
+                citations=[],
+                sufficiency_details=SufficiencyResult(
+                    is_sufficient=False,
+                    reason=f"No documents retrieved{': unknown service ' + question_service if question_service else ''}",
+                    doc_count=0,
+                    max_score=0.0,
+                    service_match=False,
+                    cause_verified=False,
+                ),
+            )
 
         # ── Step 1: Rule-based sufficiency check (NO LLM) ─────────────────
         # STUB: Upgrade this once cause_vs_symptom exists (see step 3 upgrade below)
@@ -277,17 +315,43 @@ class EvidenceReasoningAgent:
         self, evidence: List[RetrievalResult], question_entities: Dict[str, Any]
     ) -> SufficiencyResult:
         """
-        # STUB: upgrade once cause_vs_symptom exists.
-        # Uses only retrieval signals: doc count, similarity score, service match.
+        Rule-based sufficiency check using only retrieval signals.
+        Gates whether the LLM synthesis step is allowed to run.
         """
         doc_count = len(evidence)
         max_score = max((r.similarity_score for r in evidence), default=0.0)
         question_service = question_entities.get("service", "")
-        service_match = any(
-            r.document.service and question_service.lower() in r.document.service.lower()
-            for r in evidence
-        ) if question_service else True  # if no service in question, don't penalize
 
+        # Gate 1: service mismatch — if the question names a specific service but
+        # NONE of the retrieved documents belong to that service, the retrieved docs
+        # are evidence for the wrong service and must not be used for synthesis.
+        if question_service:
+            norm_q = question_service.lower().replace("-", "").replace("_", "").replace(" ", "")
+            service_match = any(
+                r.document.service
+                and (
+                    norm_q in r.document.service.lower().replace("-", "").replace("_", "").replace(" ", "")
+                    or r.document.service.lower().replace("-", "").replace("_", "").replace(" ", "") in norm_q
+                )
+                for r in evidence
+            )
+            if not service_match:
+                return SufficiencyResult(
+                    is_sufficient=False,
+                    reason=(
+                        f"No retrieved documents are for service '{question_service}'. "
+                        "The evidence belongs to unrelated services and cannot be used "
+                        "to answer this question."
+                    ),
+                    doc_count=doc_count,
+                    max_score=max_score,
+                    service_match=False,
+                    cause_verified=False,
+                )
+        else:
+            service_match = True  # no service filter — do not penalise
+
+        # Gate 2: minimum document count
         if doc_count < SUFFICIENCY_MIN_DOCS:
             return SufficiencyResult(
                 is_sufficient=False,
@@ -297,6 +361,8 @@ class EvidenceReasoningAgent:
                 service_match=service_match,
                 cause_verified=False,
             )
+
+        # Gate 3: minimum similarity score
         if max_score < SUFFICIENCY_MIN_SCORE:
             return SufficiencyResult(
                 is_sufficient=False,
@@ -306,6 +372,7 @@ class EvidenceReasoningAgent:
                 service_match=service_match,
                 cause_verified=False,
             )
+
         return SufficiencyResult(
             is_sufficient=True,
             reason="Sufficient evidence found",

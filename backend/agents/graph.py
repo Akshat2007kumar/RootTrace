@@ -174,20 +174,35 @@ class RootTraceGraph:
             logger.warning(f"Entity extraction fallback: {e}")
             entities = {}
 
+        from datetime import date as _date, timedelta
         filters = {}
         if entities.get("service"):
             filters["service"] = entities["service"]
-        if entities.get("doc_types_hint"):
-            filters["types"] = entities["doc_types_hint"]
+
+        # A single extracted date (e.g. "2025-11-15") must NOT become an exact-match
+        # date_from==date_to filter — incident docs are rarely stamped on the exact
+        # question date. Use a ±30-day window so postmortems, deployment notes, and
+        # incident reports filed around that date are all captured.
         if entities.get("date"):
-            filters["date_from"] = entities["date"]
-            filters["date_to"] = entities["date"]
-        if entities.get("date_from"):
-            filters["date_from"] = entities["date_from"]
-        if entities.get("date_to"):
-            filters["date_to"] = entities["date_to"]
+            try:
+                centre = _date.fromisoformat(entities["date"])
+                filters["date_from"] = (centre - timedelta(days=30)).isoformat()
+                filters["date_to"]   = (centre + timedelta(days=30)).isoformat()
+            except ValueError:
+                pass  # malformed date — skip the filter entirely
+        else:
+            if entities.get("date_from"):
+                filters["date_from"] = entities["date_from"]
+            if entities.get("date_to"):
+                filters["date_to"] = entities["date_to"]
+
         if entities.get("version"):
             filters["version"] = entities["version"]
+
+        # Don't combine doc-type hints with a date window — on a small corpus that
+        # double-filter often leaves 0 candidates and produces a false INSUFFICIENT_EVIDENCE.
+        if entities.get("doc_types_hint") and "date_from" not in filters:
+            filters["types"] = entities["doc_types_hint"]
 
         logger.info(f"[LangGraph Entity Extraction] Extracted filters: {filters}")
         return {

@@ -118,6 +118,20 @@ class HybridRetriever:
         self._ready = True
         logger.info(f"FAISS index built: {self.index.ntotal} vectors, dim={dim}")
 
+    def _known_services(self) -> set[str]:
+        """Return the set of normalised service names that exist in the document store."""
+        return {
+            self._norm_svc(doc.service)
+            for doc in self.documents
+            if doc.service
+        }
+
+    @staticmethod
+    def _norm_svc(s: Optional[str]) -> str:
+        if not s:
+            return ""
+        return s.lower().replace("-", "").replace("_", "").replace(" ", "").rstrip("s")
+
     def _apply_metadata_filters(
         self,
         filters: Dict[str, Any],
@@ -125,28 +139,62 @@ class HybridRetriever:
         """
         Apply metadata filters to narrow candidate document indices.
         Returns (filtered_indices, list of filter descriptions that matched).
+
+        Service filter behaviour:
+        - If the queried service matches (or closely matches) documents → restrict to those.
+        - If 0 documents match BUT the service name has substring overlap with a known service
+          (e.g. typo / alias) → relax the filter so the query can still find related docs.
+        - If 0 documents match AND the service name has NO overlap with any known service
+          (i.e. it is a completely unknown service) → do NOT relax; return 0 candidates so
+          that downstream sufficiency checks correctly return INSUFFICIENT_EVIDENCE.
         """
         candidates = list(range(len(self.documents)))
         applied_filters = []
 
-        def _norm_svc(s: Optional[str]) -> str:
-            if not s:
-                return ""
-            return s.lower().replace("-", "").replace("_", "").replace(" ", "").rstrip("s")
-
         service = filters.get("service")
         if service:
-            norm_q = _norm_svc(service)
+            norm_q = self._norm_svc(service)
             svc_candidates = [
                 i for i in candidates
                 if self.documents[i].service
-                and (norm_q in _norm_svc(self.documents[i].service) or _norm_svc(self.documents[i].service) in norm_q)
+                and (
+                    norm_q in self._norm_svc(self.documents[i].service)
+                    or self._norm_svc(self.documents[i].service) in norm_q
+                )
             ]
             if svc_candidates:
                 candidates = svc_candidates
                 applied_filters.append(f"service={service}")
             else:
-                logger.info(f"Service filter '{service}' yielded 0 docs; relaxing filter")
+                # Check whether the queried service bears ANY similarity to a known service.
+                # Similarity = at least 4 chars of the normalised query appear in a known service
+                # name, or vice-versa.  A 4-char overlap is long enough to catch typos and short
+                # aliases (e.g. "order" ↔ "ordersapi") while rejecting invented names like
+                # "userbilling" that share no substring with anything in the corpus.
+                known = self._known_services()
+                min_overlap = 4
+                has_overlap = any(
+                    (
+                        len(norm_q) >= min_overlap and norm_q[:min_overlap] in svc
+                        or len(svc) >= min_overlap and svc[:min_overlap] in norm_q
+                    )
+                    for svc in known
+                )
+                if has_overlap:
+                    # Likely a typo / alternate spelling of a real service — relax gracefully.
+                    logger.info(
+                        f"Service filter '{service}' (norm='{norm_q}') yielded 0 docs "
+                        f"but has overlap with known services; relaxing filter."
+                    )
+                else:
+                    # Completely unknown service — keep candidates empty so the sufficiency
+                    # check can return INSUFFICIENT_EVIDENCE instead of hallucinating.
+                    logger.warning(
+                        f"Service filter '{service}' (norm='{norm_q}') matches NO known service "
+                        f"in the corpus. Blocking retrieval to prevent false evidence."
+                    )
+                    applied_filters.append(f"service={service}:UNKNOWN")
+                    return [], applied_filters
 
         doc_types = filters.get("types")
         if doc_types:
@@ -200,10 +248,10 @@ class HybridRetriever:
             ]
             applied_filters.append(f"doc_ids={doc_ids}")
 
-        # If strict filtering eliminated everything, fall back to all candidates
-        if not candidates:
-            candidates = list(range(len(self.documents)))
-            applied_filters.append("fallback=all")
+        # NOTE: The blanket "fallback=all" that previously reset candidates to every document
+        # when filtering eliminated everything has been intentionally removed.  Returning an
+        # empty candidate list here is correct: it means no evidence matches the filter
+        # constraints, and the caller (retrieve()) already handles an empty list gracefully.
 
         return candidates, applied_filters
 

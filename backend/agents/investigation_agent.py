@@ -233,19 +233,35 @@ class InvestigationAgent:
             return {}
 
     def _entities_to_filters(self, entities: Dict[str, Any]) -> Dict[str, Any]:
+        from datetime import date, timedelta
         filters: Dict[str, Any] = {}
         if entities.get("service"):
             filters["service"] = entities["service"]
+
+        # A single extracted date (e.g. "2025-11-15") must NOT become an exact-match
+        # date_from==date_to filter — incident docs are rarely dated on the exact question
+        # date.  Use a ±30-day window so nearby docs (postmortems, deployment notes) are
+        # captured.  Explicit date_from / date_to ranges from the question are passed as-is.
         if entities.get("date"):
-            filters["date_from"] = entities["date"]
-            filters["date_to"] = entities["date"]
-        if entities.get("date_from"):
-            filters["date_from"] = entities["date_from"]
-        if entities.get("date_to"):
-            filters["date_to"] = entities["date_to"]
+            try:
+                centre = date.fromisoformat(entities["date"])
+                filters["date_from"] = (centre - timedelta(days=30)).isoformat()
+                filters["date_to"]   = (centre + timedelta(days=30)).isoformat()
+            except ValueError:
+                pass  # bad date string — skip filter
+        else:
+            if entities.get("date_from"):
+                filters["date_from"] = entities["date_from"]
+            if entities.get("date_to"):
+                filters["date_to"] = entities["date_to"]
+
         if entities.get("version"):
             filters["version"] = entities["version"]
-        if entities.get("doc_types_hint"):
+
+        # Only apply doc-type hints when NO date filter is active.
+        # Combining a date window + type filter on a small corpus often
+        # eliminates all candidates and produces a false INSUFFICIENT_EVIDENCE.
+        if entities.get("doc_types_hint") and "date_from" not in filters:
             filters["types"] = entities["doc_types_hint"]
         return filters
 

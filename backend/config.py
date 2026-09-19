@@ -34,12 +34,14 @@ GEMINI_API_VERSION: str = os.getenv("GEMINI_API_VERSION", "v1")
 
 # Retrieval settings
 RETRIEVAL_TOP_N: int = int(os.getenv("RETRIEVAL_TOP_N", "8"))
-SIMILARITY_FLOOR: float = float(os.getenv("SIMILARITY_FLOOR", "0.55"))
+SIMILARITY_FLOOR: float = float(os.getenv("SIMILARITY_FLOOR", "0.60"))   # raised from 0.55
 MAX_HOPS: int = int(os.getenv("MAX_HOPS", "3"))
 
 # Sufficiency thresholds (rule-based, not LLM)
+# Raised MIN_SCORE from 0.65 → 0.72: truly relevant docs score ≥0.75;
+# unrelated docs drifting through filter relaxation score 0.55–0.68.
 SUFFICIENCY_MIN_DOCS: int = int(os.getenv("SUFFICIENCY_MIN_DOCS", "2"))
-SUFFICIENCY_MIN_SCORE: float = float(os.getenv("SUFFICIENCY_MIN_SCORE", "0.65"))
+SUFFICIENCY_MIN_SCORE: float = float(os.getenv("SUFFICIENCY_MIN_SCORE", "0.72"))  # raised from 0.65
 
 # Path to document store
 DATA_DIR = pathlib.Path(__file__).parent / "data"
