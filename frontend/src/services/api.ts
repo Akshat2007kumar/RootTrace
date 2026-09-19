@@ -7,11 +7,19 @@ import type {
 } from '../types';
 
 export async function runInvestigation(question: string): Promise<InvestigateResponse> {
-  const res = await fetch('/investigate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
-  });
+  let res;
+  try {
+    res = await fetch('/investigate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+    });
+  } catch (err: any) {
+    if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+      throw new Error("Cannot connect to the server. Is the backend running? Run 'python -m uvicorn main:app --reload --port 8000' in the backend directory.");
+    }
+    throw err;
+  }
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: `HTTP ${res.status} error` }));
@@ -26,6 +34,28 @@ export async function fetchDocuments(): Promise<{ count: number; documents: Docu
   if (!res.ok) {
     throw new Error(`Failed to fetch documents: HTTP ${res.status}`);
   }
+  return res.json();
+}
+
+export async function uploadDocument(data: {
+  title: string;
+  type: string;
+  service?: string;
+  date?: string;
+  version?: string;
+  content: string;
+}): Promise<{ status: string; document_id: string }> {
+  const res = await fetch('/documents', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: `HTTP ${res.status} error` }));
+    throw new Error(errorData.detail || `Upload request failed with status ${res.status}`);
+  }
+
   return res.json();
 }
 

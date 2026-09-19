@@ -131,11 +131,7 @@ export const InvestigatePage: React.FC<InvestigatePageProps> = ({
     });
   };
 
-  // Render text containing citations with interactive CitationBadge components
-  const renderTextWithCitations = (text: string) => {
-    if (!text) return null;
-
-    // Matches citations like [INC-1042], [DEP-882], [PM-211], [GUIDE-60]
+  const renderInlineCitations = (text: string) => {
     const regex = /\[([A-Z0-9]+-[A-Z0-9_-]+)\]/g;
     const parts: (string | React.ReactNode)[] = [];
     let lastIndex = 0;
@@ -166,7 +162,56 @@ export const InvestigatePage: React.FC<InvestigatePageProps> = ({
       parts.push(text.substring(lastIndex));
     }
 
-    return <div className="leading-relaxed whitespace-pre-wrap">{parts}</div>;
+    return parts;
+  };
+
+  // Render text containing citations with interactive CitationBadge components
+  const renderTextWithCitations = (text: string) => {
+    if (!text) return null;
+
+    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+    if (jsonMatch) {
+      try {
+        const jsonObj = JSON.parse(jsonMatch[1]);
+        return (
+          <div className="space-y-4">
+            {Object.entries(jsonObj).map(([key, value]) => {
+              if (key === 'citations') return null; // citations handled in table below
+              
+              let displayValue: React.ReactNode;
+              if (typeof value === 'string') {
+                displayValue = <div className="leading-relaxed whitespace-pre-wrap">{renderInlineCitations(value)}</div>;
+              } else if (Array.isArray(value)) {
+                displayValue = (
+                  <ul className="list-disc pl-5 space-y-1">
+                    {value.map((item, i) => (
+                      <li key={i}>{typeof item === 'string' ? renderInlineCitations(item) : JSON.stringify(item)}</li>
+                    ))}
+                  </ul>
+                );
+              } else {
+                displayValue = <pre className="whitespace-pre-wrap text-xs bg-white p-2 rounded border border-gray-100">{JSON.stringify(value, null, 2)}</pre>;
+              }
+
+              return (
+                <div key={key} className="bg-[#f9fafb] p-4 rounded-lg border border-gray-200">
+                  <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 font-mono-tech">
+                    {key.replace(/_/g, ' ')}
+                  </h4>
+                  <div className="text-sm text-gray-800">
+                    {displayValue}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      } catch (e) {
+        console.error("Failed to parse JSON answer", e);
+      }
+    }
+
+    return <div className="leading-relaxed whitespace-pre-wrap">{renderInlineCitations(text)}</div>;
   };
 
   return (

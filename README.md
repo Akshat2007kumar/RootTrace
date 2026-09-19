@@ -32,25 +32,50 @@ Frontend starts at `http://localhost:5173`.
 
 ---
 
-## Test the 3 Official Inputs
+## Dynamic AI-Based Query Understanding & Dataset Search
+
+The application features a **dynamic AI Agent-based investigation system** that understands the **meaning and intent of the user's natural-language request**, rather than matching the request against a fixed set of words or predefined questions.
+
+The agent actively performs the following:
+
+1. **Understand the user's request** – Identify the key entities, services, incidents, symptoms, dates, versions, and other relevant information from the user's question.
+2. **Ignore word order** – The system understands that differently worded questions can have the same meaning. For example, *“Did orders-api become slow after the deployment?”* and *“Has the deployment caused latency in orders-api before?”* are treated as related queries.
+3. **Search the entire dataset** – Instead of checking only predefined inputs, the agent dynamically searches across all available documents and datasets.
+4. **Use semantic search** – The system understands concepts and contextual similarity rather than relying only on exact keyword matching.
+5. **Apply metadata filters** – When relevant, the agent filters results using metadata such as service, document type, date, software version, and incident ID.
+6. **Perform follow-up searches** – If the agent discovers new information, such as a version number or deployment ID, it automatically uses that information to perform additional searches.
+7. **Compare and reason over evidence** – The agent determines whether retrieved documents describe the same incident, a similar incident, a different incident, or conflicting guidance.
+8. **Return an evidence-backed response** – The final answer clearly explains the findings and references the relevant document IDs instead of simply returning a predefined result.
+9. **Handle unknown queries** – If the dataset does not contain enough evidence to answer the user's question, the agent explicitly states that the available evidence is insufficient.
+
+### Expected Flow
+**User's Natural-Language Question → AI Agent → Query Understanding → Semantic + Metadata Search → Dataset Retrieval → Follow-up Investigation → Evidence Analysis → Final Answer**
+
+This makes the application a **true dynamic investigation agent**, where users can ask questions in their own words and the system determines how to search and investigate the available datasets automatically.
+
+---
+
+## Test Scenarios (Examples of Dynamic Investigation)
+
+While you can type any natural language question, here are some complex examples that demonstrate the agent's capabilities:
 
 **Test A — Deployment-related incident**
 ```
 Why did the Order API become slow on September 16? Check whether the deployment was related and whether we have seen this before.
 ```
-Expected: 2-3 hop trace, citations include INC-1042 + DEP-882 + PM-211
+Expected: The agent parses the entities, retrieves deployment notes and incidents via multi-hop search, and cites INC-1042 + DEP-882 + PM-211.
 
 **Test B — Contradictory guidance**
 ```
 The service is failing after a deployment. What should the on-call engineer do first?
 ```
-Expected: Guidance analysis shows GUIDE-12 vs GUIDE-41 as CONDITIONAL_BOTH_APPLY — not a flat contradiction
+Expected: Guidance analysis shows GUIDE-12 vs GUIDE-41 as CONDITIONAL_BOTH_APPLY — not a flat contradiction.
 
 **Test C — Insufficient evidence**
 ```
 Did this exact failure happen before?
 ```
-Expected: INSUFFICIENT_EVIDENCE verdict — not a hallucinated answer
+Expected: INSUFFICIENT_EVIDENCE verdict — not a hallucinated answer.
 
 ---
 

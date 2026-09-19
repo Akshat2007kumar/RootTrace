@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { DocumentDrawer } from './components/DocumentDrawer';
 import { InvestigatePage } from './pages/InvestigatePage';
 import { DocumentsPage } from './pages/DocumentsPage';
+import { AnalyticsDashboard } from './pages/AnalyticsDashboard';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('investigate');
@@ -100,6 +101,10 @@ export default function App() {
             onRefresh={loadDocs}
             onSelectDoc={handleOpenDoc}
           />
+        )}
+
+        {activeTab === 'analytics' && (
+          <AnalyticsDashboard />
         )}
       </main>
 

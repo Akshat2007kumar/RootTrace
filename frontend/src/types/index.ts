@@ -118,4 +118,4 @@ export interface ParsedApiLogEntry {
   errorMsg?: string;
 }
 
-export type ActiveTab = 'investigate' | 'documents';
+export type ActiveTab = 'investigate' | 'documents' | 'analytics';

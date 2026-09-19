@@ -90,13 +90,17 @@ Discovered evidence so far (hop {hop_num}):
 
 Accumulated known entities: {session_entities}
 
+Service Dependency Map:
+{dependency_map}
+
 Based on what you found, decide:
 1. Is a follow-up search needed to answer the question more completely?
 2. If yes, what specific query should be run, and which EXACT entity from the results triggered this need?
 
 Rules:
 - Only request a follow-up if the evidence so far points to a specific gap (e.g., a referenced document ID not yet retrieved, a service name discovered that hasn't been searched, a version or date that warrants a separate search).
-- The triggering_entity MUST be something you found in the results above, not something from the original question.
+- If the current evidence points to a failure in a service, use the Service Dependency Map to instantly identify its upstream dependencies and formulate follow-up queries targeting those dependencies, even if they aren't explicitly mentioned in the text.
+- The triggering_entity MUST be something you found in the results above (or an upstream dependency identified in the map), not something from the original question.
 - If evidence is already sufficient, set needs_followup to false.
 
 Return JSON:
@@ -289,11 +293,23 @@ class InvestigationAgent:
     async def _decide_followup(self, state: InvestigationState, hop_num: int) -> Dict[str, Any]:
         """Ask LLM whether a follow-up search is needed, based on current evidence."""
         evidence_summary = self._build_evidence_summary(state)
+        
+        # Load dependency graph
+        from pathlib import Path
+        try:
+            dep_path = Path(__file__).resolve().parent.parent / "data" / "dependencies.json"
+            with open(dep_path, "r", encoding="utf-8") as f:
+                dependency_map = f.read()
+        except Exception as e:
+            logger.warning(f"Failed to load dependencies.json: {e}")
+            dependency_map = "{}"
+
         prompt = _FOLLOWUP_DECISION_PROMPT.format(
             question=state.question,
             hop_num=hop_num - 1,
             evidence_summary=evidence_summary,
             session_entities=json.dumps(state.session_entities, indent=2),
+            dependency_map=dependency_map,
         )
         try:
             return await chat_json(prompt, system=_FOLLOWUP_DECISION_SYSTEM)

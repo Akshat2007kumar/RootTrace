@@ -212,7 +212,7 @@ async def investigate(req: InvestigateRequest):
             results=results,
         ))
 
-    return InvestigateResponse(
+    response = InvestigateResponse(
         verdict=final.verdict,
         answer=final.answer,
         citations=[CitationItem(**c) for c in final.citations],
@@ -252,6 +252,23 @@ async def investigate(req: InvestigateRequest):
         total_hops=len(state.hops),
         total_documents_retrieved=len(state.all_evidence),
     )
+    
+    # Log metrics
+    import json
+    from datetime import datetime
+    try:
+        metrics_file = Path(__file__).resolve().parent / "data" / "metrics.jsonl"
+        with open(metrics_file, "a", encoding="utf-8") as f:
+            metric_record = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "prompt": question,
+                "verdict": final.verdict
+            }
+            f.write(json.dumps(metric_record) + "\n")
+    except Exception as e:
+        logger.error(f"Failed to log metric: {e}")
+
+    return response
 
 
 @app.get("/documents")
@@ -275,6 +292,55 @@ async def list_documents():
             for d in retriever.documents
         ],
     }
+
+
+class DocumentUploadRequest(BaseModel):
+    title: str
+    type: str
+    service: Optional[str] = None
+    date: Optional[str] = None
+    version: Optional[str] = None
+    content: str
+
+
+@app.post("/documents")
+async def upload_document(req: DocumentUploadRequest):
+    """Upload a new document to the knowledge base."""
+    if not retriever:
+        raise HTTPException(status_code=503, detail="System not ready")
+
+    import uuid
+    from retrieval.hybrid_retriever import Document
+    
+    # Generate a random ID for the document, e.g., DOC-UUID
+    doc_id = f"DOC-{uuid.uuid4().hex[:8].upper()}"
+    
+    new_doc = Document(
+        document_id=doc_id,
+        type=req.type,
+        service=req.service,
+        date=req.date,
+        version=req.version,
+        title=req.title,
+        content=req.content,
+        raw={
+            "document_id": doc_id,
+            "type": req.type,
+            "service": req.service,
+            "date": req.date,
+            "version": req.version,
+            "title": req.title,
+            "content": req.content,
+        }
+    )
+    
+    try:
+        retriever.add_document(new_doc)
+        return {"status": "success", "document_id": doc_id}
+    except Exception as e:
+        logger.error(f"Failed to add document: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/health")
@@ -305,6 +371,57 @@ async def get_gemini_logs(limit: int = 50):
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# ────────────────────────────────────────────────────────────────
+# Metrics Analytics
+# ────────────────────────────────────────────────────────────────
+@app.get("/metrics")
+async def get_metrics():
+    """Retrieve investigation metrics for analytics dashboard."""
+    import json
+    from collections import defaultdict
+    
+    metrics_file = Path(__file__).resolve().parent / "data" / "metrics.jsonl"
+    if not metrics_file.exists():
+        return {"data": []}
+        
+    records = []
+    try:
+        with open(metrics_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    records.append(json.loads(line))
+    except Exception as e:
+        logger.error(f"Failed to read metrics: {e}")
+        return {"data": []}
+        
+    # Group by prompt
+    grouped = defaultdict(lambda: {"ANSWERED": 0, "INSUFFICIENT_EVIDENCE": 0, "TOTAL": 0})
+    for r in records:
+        p = r.get("prompt", "Unknown")
+        v = r.get("verdict", "UNKNOWN")
+        grouped[p]["TOTAL"] += 1
+        if v in ["ANSWERED", "INSUFFICIENT_EVIDENCE"]:
+            grouped[p][v] += 1
+            
+    # Format for recharts
+    result = []
+    for prompt, counts in grouped.items():
+        # Truncate prompt if too long for chart labels
+        short_prompt = prompt if len(prompt) < 40 else prompt[:37] + "..."
+        result.append({
+            "prompt": short_prompt,
+            "full_prompt": prompt,
+            "answered": counts["ANSWERED"],
+            "insufficient": counts["INSUFFICIENT_EVIDENCE"],
+            "total": counts["TOTAL"]
+        })
+        
+    # Sort by total descending
+    result.sort(key=lambda x: x["total"], reverse=True)
+    
+    return {"data": result}
 
 
 # ────────────────────────────────────────────────────────────────

@@ -278,6 +278,17 @@ class RootTraceGraph:
             for r in evidence
         ])
 
+        # Load dependency graph
+        import json
+        from pathlib import Path
+        try:
+            dep_path = Path(__file__).resolve().parent.parent / "data" / "dependencies.json"
+            with open(dep_path, "r", encoding="utf-8") as f:
+                dependency_map = f.read()
+        except Exception as e:
+            logger.warning(f"Failed to load dependencies.json: {e}")
+            dependency_map = "{}"
+
         try:
             decision = await chat_json(
                 prompt=_FOLLOWUP_DECISION_PROMPT.format(
@@ -285,6 +296,7 @@ class RootTraceGraph:
                     hop_num=hop_num,
                     evidence_summary=evidence_summary,
                     session_entities=state.get("session_entities", {}),
+                    dependency_map=dependency_map,
                 ),
                 system=_FOLLOWUP_DECISION_SYSTEM,
             )

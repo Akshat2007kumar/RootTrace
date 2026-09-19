@@ -40,8 +40,8 @@ MAX_HOPS: int = int(os.getenv("MAX_HOPS", "3"))
 # Sufficiency thresholds (rule-based, not LLM)
 # Raised MIN_SCORE from 0.65 → 0.72: truly relevant docs score ≥0.75;
 # unrelated docs drifting through filter relaxation score 0.55–0.68.
-SUFFICIENCY_MIN_DOCS: int = int(os.getenv("SUFFICIENCY_MIN_DOCS", "2"))
-SUFFICIENCY_MIN_SCORE: float = float(os.getenv("SUFFICIENCY_MIN_SCORE", "0.72"))  # raised from 0.65
+SUFFICIENCY_MIN_DOCS: int = int(os.getenv("SUFFICIENCY_MIN_DOCS", "1"))
+SUFFICIENCY_MIN_SCORE: float = float(os.getenv("SUFFICIENCY_MIN_SCORE", "0.65"))  # lowered back to 0.65
 
 # Path to document store
 DATA_DIR = pathlib.Path(__file__).parent / "data"

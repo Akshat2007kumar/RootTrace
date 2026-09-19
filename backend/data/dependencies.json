@@ -1,0 +1,14 @@
+{
+  "orders-api": [
+    "payment-service",
+    "catalog-api",
+    "inventory-service"
+  ],
+  "payment-service": [
+    "fraud-service",
+    "banking-gateway"
+  ],
+  "catalog-api": [
+    "database-cluster-1"
+  ]
+}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, FileText, ShieldAlert, Menu, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, FileText, ShieldAlert, Menu, X, CheckCircle2, AlertCircle, BarChart3 } from 'lucide-react';
 import type { ActiveTab, HealthStatus } from '../types';
 
 interface HeaderProps {
@@ -22,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   const navItems: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'investigate', label: 'Investigate', icon: <Search className="w-4 h-4" /> },
     { id: 'documents', label: 'Documents', icon: <FileText className="w-4 h-4" /> },
+    { id: 'analytics', label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
   ];
 
   return (

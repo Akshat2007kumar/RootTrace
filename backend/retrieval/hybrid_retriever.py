@@ -57,6 +57,7 @@ class HybridRetriever:
         self.documents: List[Document] = []
         self.index: Optional[faiss.Index] = None
         self._ready = False
+        self._embeddings: Optional[np.ndarray] = None  # kept in-memory for incremental adds
 
     def build_index(self):
         """Load documents.json and build FAISS index. Called once at startup."""
@@ -115,6 +116,7 @@ class HybridRetriever:
         dim = embeddings.shape[1]
         self.index = faiss.IndexFlatIP(dim)
         self.index.add(embeddings)
+        self._embeddings = embeddings
         self._ready = True
         logger.info(f"FAISS index built: {self.index.ntotal} vectors, dim={dim}")
 
@@ -343,6 +345,61 @@ class HybridRetriever:
 
         logger.info(f"Retrieved {len(results)} documents above score floor {SIMILARITY_FLOOR}")
         return results
+
+    def add_document(self, doc: Document) -> None:
+        """
+        Incrementally add a single new document to the live in-memory FAISS index.
+        Also persists the updated document list and embedding cache to disk so the
+        new document survives a server restart.
+        """
+        if not self._ready:
+            raise RuntimeError("HybridRetriever.build_index() must be called first")
+
+        # 1. Embed the new document
+        text = f"{doc.title}. {doc.content}"
+        new_embedding = embed_texts_sync([text], task_type="retrieval_document")  # shape (1, dim)
+
+        # 2. Add to in-memory state
+        self.documents.append(doc)
+        self.index.add(new_embedding)
+        if self._embeddings is not None:
+            self._embeddings = np.vstack([self._embeddings, new_embedding])
+        else:
+            self._embeddings = new_embedding
+
+        logger.info(
+            f"Document '{doc.document_id}' added to live index. "
+            f"Total docs: {len(self.documents)}, FAISS vectors: {self.index.ntotal}"
+        )
+
+        # 3. Persist updated documents.json
+        import json as _json
+        try:
+            with open(DOCUMENTS_PATH, "r", encoding="utf-8") as f:
+                existing = _json.load(f)
+            existing.append(doc.raw if doc.raw else {
+                "document_id": doc.document_id,
+                "type": doc.type,
+                "service": doc.service,
+                "date": doc.date,
+                "version": doc.version,
+                "title": doc.title,
+                "content": doc.content,
+            })
+            with open(DOCUMENTS_PATH, "w", encoding="utf-8") as f:
+                _json.dump(existing, f, indent=2, ensure_ascii=False)
+            logger.info(f"Persisted updated documents.json ({len(existing)} total docs)")
+        except Exception as e:
+            logger.warning(f"Could not persist documents.json: {e}")
+
+        # 4. Invalidate embedding cache (force rebuild on next restart)
+        import hashlib as _hashlib
+        cache_hash_file = DOCUMENTS_PATH.parent / "embeddings_cache.hash"
+        try:
+            cache_hash_file.unlink(missing_ok=True)
+            logger.info("Invalidated embeddings cache (will rebuild on next restart)")
+        except Exception as e:
+            logger.warning(f"Could not invalidate cache: {e}")
 
 
 # Module-level singleton — built once at startup

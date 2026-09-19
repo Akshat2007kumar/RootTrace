@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Search, RefreshCw, ExternalLink, Server } from 'lucide-react';
+import { Search, RefreshCw, ExternalLink, Server, Upload } from 'lucide-react';
 import type { DocumentItem } from '../types';
+import { UploadDocumentModal } from '../components/UploadDocumentModal';
 
 interface DocumentsPageProps {
   documents: DocumentItem[];
@@ -18,6 +19,7 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedService, setSelectedService] = useState<string>('ALL');
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   // Extract unique types and services for filters
   const uniqueTypes = useMemo(() => {
@@ -70,15 +72,25 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={loading}
-          className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center space-x-3 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setIsUploadModalOpen(true)}
+            className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-[#2F9C95] hover:bg-[#247c76] text-white text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Upload</span>
+          </button>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Search & Filter Toolbar */}
@@ -222,6 +234,13 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
         </div>
       </div>
 
+      <UploadDocumentModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onSuccess={() => {
+          onRefresh(); // refresh the list after successful upload
+        }}
+      />
     </div>
   );
 };
