@@ -58,6 +58,22 @@ export const InvestigatePage: React.FC<InvestigatePageProps> = ({
       label: 'Configuration issue / Repeat check',
       query: 'Did this exact failure happen before?',
     },
+    {
+      label: 'Cross-service dependency',
+      query: 'The payment gateway is throwing 500s. Could a recent change in the catalog service be causing this?',
+    },
+    {
+      label: 'Performance / High Latency',
+      query: 'We saw a latency spike in the auth-service around 2 PM. Were there any database migrations running at that time?',
+    },
+    {
+      label: 'Missing evidence test',
+      query: 'Why did the marketing landing page go down yesterday?',
+    },
+    {
+      label: 'Security / Access control',
+      query: 'Users are getting 403 Forbidden errors when trying to upload profile pictures. Has the IAM policy for the S3 bucket changed?',
+    },
   ];
 
   const handleInvestigate = async (overrideQuestion?: string) => {

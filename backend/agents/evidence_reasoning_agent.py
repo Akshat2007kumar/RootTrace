@@ -147,7 +147,7 @@ CRITICAL RULES — violating any of these is a CRITICAL FAILURE:
 9. If you cannot fully answer the question using the provided documents alone, begin your
    response with "INSUFFICIENT_EVIDENCE: " followed by one sentence stating exactly what
    information is missing.
-10. You MUST output your final answer formatted entirely as a structured JSON incident report enclosed in ```json fences. You must dynamically invent the most appropriate JSON keys based on the specific type of incident you found. For example, if it's a timeout, include fields like 'latency_metrics' and 'upstream_service'. If it's a database crash, include fields like 'locked_tables'. Always include a 'citations' array."""
+10. You MUST output your final answer as human-readable Markdown text. Use headings, bullet points, and clear paragraphs to explain the incident details, root causes, and resolutions. Do NOT use JSON format."""
 
 _FINAL_ANSWER_PROMPT = """Investigation question: {question}
 

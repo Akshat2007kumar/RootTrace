@@ -1,3 +1,16 @@
 {"timestamp": "2026-09-19T09:08:58.389903", "prompt": "Why did user logins fail on the Auth Service in early March 2026, and was the v5.9.0 deployment responsible?", "verdict": "ANSWERED"}
 {"timestamp": "2026-09-19T09:09:22.938129", "prompt": "Why did user logins fail on the Auth Service in early March 2026, and was the v5.9.0 deployment responsible?", "verdict": "ANSWERED"}
 {"timestamp": "2026-09-19T09:10:49.044143", "prompt": "Why did user logins fail on the Auth Service in early March 2026, and was the v5.9.0 deployment responsible?", "verdict": "ANSWERED"}
+{"timestamp": "2026-09-19T09:18:43.463961", "prompt": "Why did the order api become slow?", "verdict": "ANSWERED"}
+{"timestamp": "2026-09-19T09:31:35.391292", "prompt": "Why did the Order API become slow on September 16? Check whether the deployment was related and whether we have seen this before.", "verdict": "INSUFFICIENT_EVIDENCE"}
+{"timestamp": "2026-09-19T09:33:39.152471", "prompt": "Why did the Order API become slow on September 16? Check whether the deployment was related and whether we have seen this before.", "verdict": "INSUFFICIENT_EVIDENCE"}
+{"timestamp": "2026-09-19T09:35:12.291115", "prompt": "Why did user logins fail on the Auth Service in early March 2026, and was the v5.9.0 deployment responsible?", "verdict": "ANSWERED"}
+{"timestamp": "2026-09-19T09:38:35.086587", "prompt": "The service is failing after a deployment. What should the on-call engineer do first?", "verdict": "ANSWERED"}
+{"timestamp": "2026-09-19T09:39:21.888880", "prompt": "Tell me about Hello", "verdict": "INSUFFICIENT_EVIDENCE"}
+{"timestamp": "2026-09-19T09:41:48.210969", "prompt": "Saturation of connection of database??", "verdict": "ANSWERED"}
+{"timestamp": "2026-09-19T09:46:13.842135", "prompt": "Can you summarize the findings from the August 2025 TLS certificate expiry incident postmortem?", "verdict": "ANSWERED"}
+{"timestamp": "2026-09-19T09:53:02.744882", "prompt": "We saw a latency spike in the auth-service around 2 PM. Were there any database migrations running at that time?", "verdict": "INSUFFICIENT_EVIDENCE"}
+{"timestamp": "2026-09-19T09:55:23.415813", "prompt": "Why did the Order API become slow on September 16? Check whether the deployment was related and whether we have seen this before.", "verdict": "INSUFFICIENT_EVIDENCE"}
+{"timestamp": "2026-09-19T09:57:14.026513", "prompt": "The payment gateway is throwing 500s. Could a recent change in the catalog service be causing this?", "verdict": "ANSWERED"}
+{"timestamp": "2026-09-19T09:59:28.381788", "prompt": "The payment gateway is throwing 500s. Could a recent change in the catalog service be causing this?", "verdict": "ANSWERED"}
+{"timestamp": "2026-09-19T10:05:21.028497", "prompt": "Why did the Order API become slow on September 16? Check whether the deployment was related and whether we have seen this before.", "verdict": "INSUFFICIENT_EVIDENCE"}

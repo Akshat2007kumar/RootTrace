@@ -155,44 +155,41 @@ class HybridRetriever:
 
         service = filters.get("service")
         if service:
-            norm_q = self._norm_svc(service)
-            svc_candidates = [
-                i for i in candidates
-                if self.documents[i].service
-                and (
-                    norm_q in self._norm_svc(self.documents[i].service)
-                    or self._norm_svc(self.documents[i].service) in norm_q
-                )
-            ]
+            services = service if isinstance(service, list) else [service]
+            norm_qs = [self._norm_svc(s) for s in services]
+            
+            svc_candidates = []
+            for i in candidates:
+                if not self.documents[i].service:
+                    continue
+                doc_svc = self._norm_svc(self.documents[i].service)
+                if any((nq in doc_svc or doc_svc in nq) for nq in norm_qs):
+                    svc_candidates.append(i)
+                    
             if svc_candidates:
                 candidates = svc_candidates
                 applied_filters.append(f"service={service}")
             else:
                 # Check whether the queried service bears ANY similarity to a known service.
-                # Similarity = at least 4 chars of the normalised query appear in a known service
-                # name, or vice-versa.  A 4-char overlap is long enough to catch typos and short
-                # aliases (e.g. "order" ↔ "ordersapi") while rejecting invented names like
-                # "userbilling" that share no substring with anything in the corpus.
                 known = self._known_services()
                 min_overlap = 4
-                has_overlap = any(
-                    (
-                        len(norm_q) >= min_overlap and norm_q[:min_overlap] in svc
-                        or len(svc) >= min_overlap and svc[:min_overlap] in norm_q
-                    )
-                    for svc in known
-                )
+                has_overlap = False
+                for nq in norm_qs:
+                    if any((len(nq) >= min_overlap and nq[:min_overlap] in svc or len(svc) >= min_overlap and svc[:min_overlap] in nq) for svc in known):
+                        has_overlap = True
+                        break
+                        
                 if has_overlap:
                     # Likely a typo / alternate spelling of a real service — relax gracefully.
                     logger.info(
-                        f"Service filter '{service}' (norm='{norm_q}') yielded 0 docs "
+                        f"Service filter '{service}' yielded 0 docs "
                         f"but has overlap with known services; relaxing filter."
                     )
                 else:
                     # Completely unknown service — keep candidates empty so the sufficiency
                     # check can return INSUFFICIENT_EVIDENCE instead of hallucinating.
                     logger.warning(
-                        f"Service filter '{service}' (norm='{norm_q}') matches NO known service "
+                        f"Service filter '{service}' matches NO known service "
                         f"in the corpus. Blocking retrieval to prevent false evidence."
                     )
                     applied_filters.append(f"service={service}:UNKNOWN")
